@@ -1,0 +1,1627 @@
+{
+  "info": {
+    "_postman_id": "a1c3e5f7-2b4d-4f6a-8c0e-1a3b5c7d9e0f",
+    "name": "IT Install Kit Service - Kit Suite",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "E2E Postman suite for the IT Install Kit Service Domain (BIAN-aligned, ADR-001/005/013/019/030). Registers a kit (system, language, machine class: no machine, no secret), reads and lists it, updates it (the revision goes up), reads the stick definition, records install reports (the kit revision that ran is stored), retires and reinstates it and reads its ledger. Then proves the service is staff only and covers the negative guarantees with RFC 7807 error_code assertions. It files everything under its own generated tenant id (iktOrganisationId)."
+  },
+  "item": [
+    {
+      "name": "00. Infrastructure & Telemetry",
+      "item": [
+        {
+          "name": "Health Check (Aggregated)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Health status is UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ],
+              "query": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01. Kit and Report Lifecycle (BIAN Behavior Qualifiers)",
+      "item": [
+        {
+          "name": "Initiate a kit",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('iktOrganisationId')) { pm.collectionVariables.set('iktOrganisationId', pm.variables.replaceIn('{{$guid}}')); }",
+                  "pm.collectionVariables.set('iktKitName', 'Windows 11 EN BASE ' + Date.now());",
+                  "pm.request.body.raw = pm.request.body.raw.replace('Windows 11 EN BASE', pm.collectionVariables.get('iktKitName'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const kit = pm.response.json();",
+                  "pm.collectionVariables.set('iktKitId', kit.id);",
+                  "pm.test('A new kit is ACTIVE at revision 1', () => { pm.expect(kit.status).to.eql('ACTIVE'); pm.expect(kit.revision).to.eql(1); });",
+                  "pm.test('It names its system, language and machine class', () => { pm.expect(kit.systemId).to.eql('W11'); pm.expect(kit.language).to.eql('EN'); pm.expect(kit.machineClass).to.eql('BASE'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Windows 11 EN BASE\",\n  \"family\": \"WINDOWS\",\n  \"role\": \"WORKSTATION\",\n  \"language\": \"EN\",\n  \"systemId\": \"W11\",\n  \"machineClass\": \"BASE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Retrieve the kit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('It is the kit', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('iktKitId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/{{iktKitId}}/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "{{iktKitId}}",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "List the kits, filtered by family",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('The kit is listed', () => pm.expect(pm.response.json().length).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/retrieve?family=WINDOWS&status=ACTIVE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "retrieve"
+              ],
+              "query": [
+                {
+                  "key": "family",
+                  "value": "WINDOWS"
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List the kits, filtered to a family with none",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('None', () => pm.expect(pm.response.json().length).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/retrieve?family=LINUX",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "retrieve"
+              ],
+              "query": [
+                {
+                  "key": "family",
+                  "value": "LINUX"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update the kit (revision goes up)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.body.raw = pm.request.body.raw.replace('placeholder', pm.collectionVariables.get('iktKitName'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/{{iktKitId}}/update",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "{{iktKitId}}",
+                "update"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"placeholder\",\n  \"family\": \"WINDOWS\",\n  \"role\": \"WORKSTATION\",\n  \"language\": \"PT\",\n  \"systemId\": \"W11\",\n  \"machineClass\": \"P520\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "The update is visible, at revision 2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Revision 2, PT, P520', () => { const k = pm.response.json(); pm.expect(k.revision).to.eql(2); pm.expect(k.language).to.eql('PT'); pm.expect(k.machineClass).to.eql('P520'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/{{iktKitId}}/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "{{iktKitId}}",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "The stick definition lists the active kit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('One kit under its system', () => { const d = pm.response.json(); pm.expect(d.kitCount).to.eql(1); pm.expect(d.systems[0].systemId).to.eql('W11'); pm.expect(d.systems[0].kits[0].revision).to.eql(2); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/stick-definition/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "stick-definition",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "Record an install report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.collectionVariables.set('iktReportId', r.id);",
+                  "pm.test('It keeps the kit revision that ran', () => { pm.expect(r.kitId).to.eql(pm.collectionVariables.get('iktKitId')); pm.expect(r.kitRevision).to.eql(2); pm.expect(r.outcome).to.eql('PARTIAL'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/install-report/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "install-report",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kitId\": \"{{iktKitId}}\",\n  \"addOnVersion\": \"1.2.2\",\n  \"outcome\": \"PARTIAL\",\n  \"warnings\": 1,\n  \"occurredAt\": \"2026-11-17T12:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Retrieve the report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('It is the report', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('iktReportId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/install-report/{{iktReportId}}/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "install-report",
+                "{{iktReportId}}",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "List the reports, filtered by kit and outcome",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('One report', () => pm.expect(pm.response.json().length).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/install-report/retrieve?kitId={{iktKitId}}&outcome=PARTIAL",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "install-report",
+                "retrieve"
+              ],
+              "query": [
+                {
+                  "key": "kitId",
+                  "value": "{{iktKitId}}"
+                },
+                {
+                  "key": "outcome",
+                  "value": "PARTIAL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List the reports, filtered to an outcome with none",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('None', () => pm.expect(pm.response.json().length).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/install-report/retrieve?outcome=FAILED",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "install-report",
+                "retrieve"
+              ],
+              "query": [
+                {
+                  "key": "outcome",
+                  "value": "FAILED"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Retire the kit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/{{iktKitId}}/control/retire",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "{{iktKitId}}",
+                "control",
+                "retire"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "The stick definition no longer lists it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Empty', () => pm.expect(pm.response.json().kitCount).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/stick-definition/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "stick-definition",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "A retired kit can still be reported on",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/install-report/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "install-report",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kitId\": \"{{iktKitId}}\",\n  \"addOnVersion\": \"1.2.3\",\n  \"outcome\": \"SUCCEEDED\",\n  \"warnings\": 0,\n  \"occurredAt\": \"2026-11-17T13:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Reinstate the kit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/{{iktKitId}}/control/reinstate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "{{iktKitId}}",
+                "control",
+                "reinstate"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "The audit log keeps every step",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('INITIATED, UPDATED, RETIRED, REINSTATED', () => pm.expect(pm.response.json().map(e => e.action)).to.eql(['INITIATED', 'UPDATED', 'RETIRED', 'REINSTATED']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/{{iktKitId}}/audit-log/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "{{iktKitId}}",
+                "audit-log",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Staff Only (REQUESTER refused)",
+      "item": [
+        {
+          "name": "A requester cannot list the kits",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('error_code is ERR-IKT-00403', () => pm.expect(pm.response.json().error_code).to.eql('ERR-IKT-00403'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              },
+              {
+                "key": "X-Role",
+                "value": "REQUESTER"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "A requester cannot read the stick definition",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('error_code is ERR-IKT-00403', () => pm.expect(pm.response.json().error_code).to.eql('ERR-IKT-00403'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              },
+              {
+                "key": "X-Role",
+                "value": "REQUESTER"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/stick-definition/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "stick-definition",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "A requester cannot list the reports",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('error_code is ERR-IKT-00403', () => pm.expect(pm.response.json().error_code).to.eql('ERR-IKT-00403'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              },
+              {
+                "key": "X-Role",
+                "value": "REQUESTER"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/install-report/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "install-report",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "A requester cannot register a kit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('error_code is ERR-IKT-00403', () => pm.expect(pm.response.json().error_code).to.eql('ERR-IKT-00403'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              },
+              {
+                "key": "X-Role",
+                "value": "REQUESTER"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nope\",\n  \"family\": \"WINDOWS\",\n  \"role\": \"WORKSTATION\",\n  \"language\": \"EN\",\n  \"systemId\": \"W11\",\n  \"machineClass\": \"BASE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Negative Tests & Guarantees",
+      "item": [
+        {
+          "name": "A server kit in Portuguese is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error_code is ERR-VALIDATION-00400', () => pm.expect(pm.response.json().error_code).to.eql('ERR-VALIDATION-00400'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Server PT\",\n  \"family\": \"WINDOWS\",\n  \"role\": \"SERVER\",\n  \"language\": \"PT\",\n  \"systemId\": \"S19\",\n  \"machineClass\": \"BASE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A system id that is not a short code is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error_code is ERR-VALIDATION-00400', () => pm.expect(pm.response.json().error_code).to.eql('ERR-VALIDATION-00400'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bad code\",\n  \"family\": \"WINDOWS\",\n  \"role\": \"WORKSTATION\",\n  \"language\": \"EN\",\n  \"systemId\": \"not a code!\",\n  \"machineClass\": \"BASE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A blank name is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error_code is ERR-VALIDATION-00400', () => pm.expect(pm.response.json().error_code).to.eql('ERR-VALIDATION-00400'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \" \",\n  \"family\": \"WINDOWS\",\n  \"role\": \"WORKSTATION\",\n  \"language\": \"EN\",\n  \"systemId\": \"W11\",\n  \"machineClass\": \"BASE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "An unknown family is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Odd\",\n  \"family\": \"MAINFRAME\",\n  \"role\": \"WORKSTATION\",\n  \"language\": \"EN\",\n  \"systemId\": \"W11\",\n  \"machineClass\": \"BASE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A duplicate kit name is a conflict",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.body.raw = pm.request.body.raw.replace('placeholder', pm.collectionVariables.get('iktKitName'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error_code is ERR-IKT-00409', () => pm.expect(pm.response.json().error_code).to.eql('ERR-IKT-00409'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"placeholder\",\n  \"family\": \"WINDOWS\",\n  \"role\": \"WORKSTATION\",\n  \"language\": \"EN\",\n  \"systemId\": \"W11\",\n  \"machineClass\": \"BASE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Reinstating an active kit is a conflict",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error_code is ERR-IKT-00409', () => pm.expect(pm.response.json().error_code).to.eql('ERR-IKT-00409'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/{{iktKitId}}/control/reinstate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "{{iktKitId}}",
+                "control",
+                "reinstate"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "Another tenant cannot see the kit",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('iktOtherTenantId', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error_code is ERR-IKT-00404', () => pm.expect(pm.response.json().error_code).to.eql('ERR-IKT-00404'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOtherTenantId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/{{iktKitId}}/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "{{iktKitId}}",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "A report for an unknown kit is a 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error_code is ERR-IKT-00404', () => pm.expect(pm.response.json().error_code).to.eql('ERR-IKT-00404'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/install-report/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "install-report",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kitId\": \"00000000-0000-4000-8000-000000000000\",\n  \"addOnVersion\": \"1.2.2\",\n  \"outcome\": \"FAILED\",\n  \"warnings\": 0,\n  \"occurredAt\": \"2026-11-17T12:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A malformed add-on version is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error_code is ERR-VALIDATION-00400', () => pm.expect(pm.response.json().error_code).to.eql('ERR-VALIDATION-00400'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/install-report/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "install-report",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kitId\": \"{{iktKitId}}\",\n  \"addOnVersion\": \"v1\",\n  \"outcome\": \"FAILED\",\n  \"warnings\": 0,\n  \"occurredAt\": \"2026-11-17T12:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Too many warnings are refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error_code is ERR-VALIDATION-00400', () => pm.expect(pm.response.json().error_code).to.eql('ERR-VALIDATION-00400'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/install-report/initiate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "install-report",
+                "initiate"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kitId\": \"{{iktKitId}}\",\n  \"addOnVersion\": \"1.2.2\",\n  \"outcome\": \"FAILED\",\n  \"warnings\": 10001,\n  \"occurredAt\": \"2026-11-17T12:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A missing tenant is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "There is no DELETE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Not found or not allowed', () => pm.expect([404, 405]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{iktOrganisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/it-install-kit/v1/{{iktKitId}}/retrieve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "it-install-kit",
+                "v1",
+                "{{iktKitId}}",
+                "retrieve"
+              ],
+              "query": []
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "iktOrganisationId",
+      "value": ""
+    },
+    {
+      "key": "iktOtherTenantId",
+      "value": ""
+    },
+    {
+      "key": "iktKitId",
+      "value": ""
+    },
+    {
+      "key": "iktKitName",
+      "value": ""
+    },
+    {
+      "key": "iktReportId",
+      "value": ""
+    }
+  ]
+}
